@@ -1,0 +1,9 @@
+spring:
+  data:
+    mongodb:
+      uri: mongodb://localhost:27017/oswc  # 로컬 MongoDB
+server:
+  port: 8080
+logging:
+  level:
+    org.springframework.data.mongodb.core.MongoTemplate: info

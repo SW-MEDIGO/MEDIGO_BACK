@@ -1,0 +1,18 @@
+# 기본은 자동
+* text=auto
+
+# 윈도우 전용 스크립트/배치
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+# 리눅스/맥에서 실행되는 스크립트는 LF 강제
+*.sh text eol=lf
+gradlew text eol=lf
+
+# Gradle 설정/프로퍼티, 그리고 코드/설정 파일은 LF 권장
+gradle/wrapper/gradle-wrapper.properties text eol=lf
+*.kts text eol=lf
+*.java text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+*.md text eol=lf
