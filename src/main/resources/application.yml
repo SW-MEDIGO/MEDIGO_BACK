@@ -6,13 +6,14 @@ spring:
 server:
   port: 8080
 
+app:
+  jwt:
+    # 32자 이상 랜덤 문자열로 교체!
+    secret: "replace-with-a-long-random-secret-32+chars"
+    access-exp-min: 30
+    refresh-exp-days: 14
+
 logging:
   level:
     org.springframework.data.mongodb.core.MongoTemplate: info
-
-app:
-  jwt:
-    # ★ 실제로 32자 이상 랜덤/복잡한 문자열로 교체!
-    secret: ecc7ff130fc24f1fab63bdaabbb60d591de710fe88754e55ab3c2c64358cc83d
-    access-exp-min: 30     # Access Token 유효기간(분)
-    refresh-exp-days: 14   # Refresh Token 유효기간(일)
+    org.springframework.security: DEBUG

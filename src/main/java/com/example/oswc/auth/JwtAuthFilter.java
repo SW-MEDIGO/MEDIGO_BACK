@@ -2,34 +2,52 @@ package com.example.oswc.auth;
 
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
-import jakarta.servlet.http.*;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.http.HttpHeaders;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.filter.OncePerRequestFilter;
+
 import java.io.IOException;
 import java.util.List;
 import java.util.Map;
 
 public class JwtAuthFilter extends OncePerRequestFilter {
+
     private final JwtTokenProvider tokenProvider;
-    public JwtAuthFilter(JwtTokenProvider tokenProvider){ this.tokenProvider = tokenProvider; }
+
+    public JwtAuthFilter(JwtTokenProvider tokenProvider) {
+        this.tokenProvider = tokenProvider;
+    }
 
     @Override
-    protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain chain)
-            throws ServletException, IOException {
-        String h = request.getHeader(HttpHeaders.AUTHORIZATION);
-        if (h!=null && h.startsWith("Bearer ")) {
-            try{
-                Map<String,Object> c = tokenProvider.parseClaims(h.substring(7));
-                String sub = (String)c.get("sub"); String role=(String)c.get("role");
-                if(sub!=null && role!=null){
+    protected void doFilterInternal(
+            HttpServletRequest request,
+            HttpServletResponse response,
+            FilterChain filterChain
+    ) throws ServletException, IOException {
+        String header = request.getHeader(HttpHeaders.AUTHORIZATION);
+        if (header != null && header.startsWith("Bearer ")) {
+            String token = header.substring(7);
+            try {
+                Map<String, Object> claims = tokenProvider.parseClaims(token);
+                String userId = (String) claims.get("sub");
+                String role = (String) claims.get("role");
+                if (userId != null && role != null) {
                     var auth = new UsernamePasswordAuthenticationToken(
-                        sub, null, List.of(new SimpleGrantedAuthority("ROLE_"+role)));
-                    request.setAttribute("SPRING_SECURITY_AUTHENTICATION", auth);
+                            userId,
+                            null,
+                            List.of(new SimpleGrantedAuthority("ROLE_" + role))
+                    );
+                    // ✅ 표준 방식: SecurityContext 에 바로 세팅
+                    SecurityContextHolder.getContext().setAuthentication(auth);
                 }
-            }catch(Exception ignore){}
+            } catch (Exception ignored) {
+                // 파싱 실패/만료 등은 인증 없이 다음 필터 진행
+            }
         }
-        chain.doFilter(request,response);
+        filterChain.doFilter(request, response);
     }
 }
