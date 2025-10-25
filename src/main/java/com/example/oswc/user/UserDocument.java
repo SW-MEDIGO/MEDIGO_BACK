@@ -10,32 +10,28 @@ public class UserDocument {
     @Id
     private String id;
 
-    /** 로그인 아이디 (중복 금지) */
     @Indexed(unique = true)
     private String username;
 
-    /** 비밀번호 해시(BCrypt 등) */
     private String passwordHash;
 
-    /** 표시 이름 */
     private String name;
 
-    /** 이메일 (중복 금지) */
     @Indexed(unique = true)
     private String email;
 
-    /** 권한/역할: "USER" | "MANAGER" */
-    private String role = "USER";
+    private String role; // USER / MANAGER
 
-    /** 약관 동의 내장 문서 */
     private Agreements agreements;
 
-    /** 생성 시각(에포크 밀리초) */
-    private long createdAtEpochMillis;
+    /** 계정 생성 시각 (epoch millis) */
+    private Long createdAtEpochMillis;
 
-    /**
-     * 약관 동의 정보 (내장 문서)
-     */
+    /** 프로필 이미지(아바타) 접근 URL (예: /files/avatars/<userId>.png) */
+    private String avatarUrl;
+
+    // ---------- Inner Types ----------
+
     public static class Agreements {
         public boolean termsOfService;
         public boolean privacyPolicy;
@@ -46,86 +42,46 @@ public class UserDocument {
 
         public Agreements() { }
 
-        public Agreements(boolean termsOfService,
-                          boolean privacyPolicy,
-                          boolean locationService,
-                          boolean ageLimit,
-                          boolean marketingConsent,
-                          long agreedAtEpochMillis) {
-            this.termsOfService = termsOfService;
-            this.privacyPolicy = privacyPolicy;
-            this.locationService = locationService;
-            this.ageLimit = ageLimit;
-            this.marketingConsent = marketingConsent;
-            this.agreedAtEpochMillis = agreedAtEpochMillis;
+        public Agreements(boolean tos, boolean priv, boolean loc, boolean age, boolean mkt, long at) {
+            this.termsOfService = tos;
+            this.privacyPolicy = priv;
+            this.locationService = loc;
+            this.ageLimit = age;
+            this.marketingConsent = mkt;
+            this.agreedAtEpochMillis = at;
         }
     }
 
+    // ---------- Constructors ----------
+
     public UserDocument() { }
 
-    // ------------------ Getters / Setters ------------------
+    // ---------- Getters / Setters ----------
 
-    public String getId() {
-        return id;
-    }
+    public String getId() { return id; }
+    public void setId(String id) { this.id = id; }
 
-    public void setId(String id) {
-        this.id = id;
-    }
+    public String getUsername() { return username; }
+    public void setUsername(String username) { this.username = username; }
 
-    public String getUsername() {
-        return username;
-    }
+    public String getPasswordHash() { return passwordHash; }
+    public void setPasswordHash(String passwordHash) { this.passwordHash = passwordHash; }
 
-    public void setUsername(String username) {
-        this.username = username;
-    }
+    public String getName() { return name; }
+    public void setName(String name) { this.name = name; }
 
-    public String getPasswordHash() {
-        return passwordHash;
-    }
+    public String getEmail() { return email; }
+    public void setEmail(String email) { this.email = email; }
 
-    public void setPasswordHash(String passwordHash) {
-        this.passwordHash = passwordHash;
-    }
+    public String getRole() { return role; }
+    public void setRole(String role) { this.role = role; }
 
-    public String getName() {
-        return name;
-    }
+    public Agreements getAgreements() { return agreements; }
+    public void setAgreements(Agreements agreements) { this.agreements = agreements; }
 
-    public void setName(String name) {
-        this.name = name;
-    }
+    public Long getCreatedAtEpochMillis() { return createdAtEpochMillis; }
+    public void setCreatedAtEpochMillis(Long createdAtEpochMillis) { this.createdAtEpochMillis = createdAtEpochMillis; }
 
-    public String getEmail() {
-        return email;
-    }
-
-    public void setEmail(String email) {
-        this.email = email;
-    }
-
-    public String getRole() {
-        return role;
-    }
-
-    public void setRole(String role) {
-        this.role = role;
-    }
-
-    public Agreements getAgreements() {
-        return agreements;
-    }
-
-    public void setAgreements(Agreements agreements) {
-        this.agreements = agreements;
-    }
-
-    public long getCreatedAtEpochMillis() {
-        return createdAtEpochMillis;
-    }
-
-    public void setCreatedAtEpochMillis(long createdAtEpochMillis) {
-        this.createdAtEpochMillis = createdAtEpochMillis;
-    }
+    public String getAvatarUrl() { return avatarUrl; }
+    public void setAvatarUrl(String avatarUrl) { this.avatarUrl = avatarUrl; }
 }
