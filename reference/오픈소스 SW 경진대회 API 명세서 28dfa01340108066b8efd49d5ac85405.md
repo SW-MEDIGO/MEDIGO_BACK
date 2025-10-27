@@ -1,0 +1,1051 @@
+# 오픈소스 SW 경진대회 API 명세서
+
+# 🏥 병원 동행 앱 API 명세서
+
+## 1. 📜 기본 규칙 (Global Rules)
+
+모든 API는 아래의 규칙을 따릅니다.
+
+- **Base URL**: `https://api.your-app.com/v1`
+- **데이터 형식**:
+    - 일반적인 모든 요청(`POST`, `PATCH`)의 Body는 **JSON** 형식이어야 합니다. (`Content-Type:application/json`)
+    - 예외: 프로필 사진과 같이 **파일 업로드**의 경우 `Content-Type` 은 **`multipart/form-data`** 사용
+
+---
+
+### **인증 (Authentication) 및 토큰 관리**
+
+### **1. 기본 API 요청**
+
+- 로그인이 필요한 모든 API는 요청 헤더에 Access Token을 포함해야 합니다.
+- **`Authorization: Bearer {AccessToken}`**
+
+### **2. ✅ Access Token 만료 및 재발급 흐름**
+
+1. **API 요청**: 클라이언트는 `Authorization` 헤더에 Access Token을 담아 API를 요청
+2. **토큰 만료 응답 (401 에러)**: 만약 Access Token이 만료되었다면, 서버는 **HTTP 상태 코드 `401 Unauthorized`** 와 함께 아래와 같은 특정 에러 코드를 응답합니다.
+    
+    ```json
+    {
+      "status": "error",
+      "error": {
+        "code": "TOKEN_EXPIRED",
+        "message": "Access Token이 만료되었습니다."
+      }
+    }
+    
+    ```
+    
+3. **토큰 재발급 요청**: 클라이언트는 `TOKEN_EXPIRED` 코드를 확인하면, 즉시 **`POST /auth/refresh`** API를 호출해야 합니다. 이때, 요청 Body에 저장해 두었던 **Refresh Token**을 담아 보냅니다.
+4. **새 Access Token 수신**: Refresh Token이 유효하다면, 서버는 새로운 Access Token을 발급해 줍니다. 클라이언트는 이 새 토큰을 기존 토큰에 덮어씌워 저장해야 합니다.
+5. **기존 요청 재시도**: 새로운 Access Token을 받은 후, **2번 단계에서 실패했던 원래의 API 요청**을 다시 시도합니다. 이 과정은 사용자에게 보이지 않게 자동으로 처리되어야 합니다.
+6. **Refresh Token 만료**: 만약 3번 단계에서 Refresh Token마저 만료되었다는 에러를 받으면, 사용자의 로그인 세션이 완전히 만료된 것입니다. 이때는 **사용자를 로그아웃 처리**하고 로그인 페이지로 이동시켜야 합니다.
+
+- **표준 응답 구조 (Standard Response Structure)**:
+    - **성공 ✅**: 모든 성공 응답은 `data` 필드에 실제 데이터를 담아 반환합니다.
+    - **실패 ❌**: 모든 에러 응답은 예측 가능한 `error` 객체를 반환합니다.
+
+---
+
+## 2. 🧑‍🤝‍🧑 회원 / 인증 (Auth & Users)
+
+- **POST /auth/signup - 회원가입**
+    
+    **설명**: 사용자가 이메일, 비밀번호, 이름, 역할(사용자/매니저)을 제공하여 새로운 계정을 생성합니다.
+    
+    ### **Request Body**
+    
+    | Key | Type | Constraints | 설명 |
+    | --- | --- | --- | --- |
+    | `id` | String | `required` | 로그인 시 사용할 고유한 아이디 |
+    | `password` | String | `required`,`minLength: 8` , `special_char: 1`  | 8자 이상, 특수 문자 1개 이상을 포함하는 비밀번호 |
+    | `name` | String | `required`,`maxLength: 20` | 사용자의 실명 |
+    | `email` | String | `required`,`email format` | 아이디/비밀번호 찾기에 사용될 고유한 이메일 주소 |
+    | `role` | String | `required`,`enum: ["USER", "MANAGER"]` | 가입 유형.`USER`(일반 사용자) 또는`MANAGER`(동행 매니저) |
+    | `ahreements` | Object | `required` | 약관 동의 여부 ( 필수 약관은 `true`일 때만 가입 가능 |
+    
+    **agreements 객체 상세:**
+    
+    - **필수 항목: `termsOfService`, `privacyPolicy`, `LocationService`, `AgeLimit`**
+    - **선택 항목: `marketingConsent`**
+    
+    ```json
+    {
+      "termsOfService": true,
+      "privacyPolicy": true,
+      "LocationService": true,
+      "AgeLimit": true,
+      "marketingConsent": false
+    }
+    ```
+    
+    **Example Request:**
+    
+    ```json
+    {
+      "username": "hospital123",
+      "password": "strongPassword123!",
+      "name": "김철수",
+      "email": "chulsoo.kim@example.com",
+      "role": "USER",
+      "agreements": {
+        "termsOfService": true,
+        "privacyPolicy": true,
+        "LocationService": true,
+        "AgeLimit": true,
+        "marketingConsent": false
+      }
+    }
+    ```
+    
+    ### **Responses**
+    
+    - **✅ 201 Created**: (성공 시 응답)
+        
+        ```json
+        {
+          "status": "success",
+          "data": {
+            "message": "회원가입이 성공적으로 완료되었습니다."
+          }
+        }
+        ```
+        
+    - **❌ 400 Bad Request**: (비밀번호 규칙 위반)
+        - **Case 1: 길이가 8자 미만일 경우**
+        
+        ```json
+        {
+          "status": "error",
+          "error": {
+            "code": "INVALID_PASSWORD_LENGTH",
+            "message": "비밀번호는 8자 이상이어야 합니다."
+          }
+        }
+        ```
+        
+        - **Case 2: 특수 문자가 포함되지 않았을 경우**
+        
+        ```json
+        {
+          "status": "error",
+          "error": {
+            "code": "INVALID_PASSWORD_FORMAT",
+            "message": "비밀번호는 특수문자를 1개 이상 포함해야 합니다."
+          }
+        }
+        ```
+        
+    - ❌ **400 Bad Request (필수 약관 미동의):**
+        
+        ```json
+        {
+            "status": "error",
+            "error": {
+                "code": "AGREEMENT_REQUIRED",
+                "message": "필수 약관(위치기반서비스, 연령 확인 등)에 동의해야 합니다."
+            }
+        }
+        ```
+        
+    - **❌ 409 Conflict (중복된 정보)**:
+        - **Case 1: 중복 이메일 인증 실패**
+        
+        ```json
+        {
+          "status": "error",
+          "error": {
+            "code": "EMAIL_ALREADY_EXISTS",
+            "message": "이미 가입된 이메일입니다."
+          }
+        }
+        ```
+        
+        - **Case 2: 중복 아이디 인증 실패**
+        
+        ```jsx
+        {
+          "status": "error",
+          "error": {
+            "code": "ID_ALREADY_EXISTS",
+            "message": "이미 가입된 아이디입니다."
+          }
+        }
+        ```
+        
+- **POST /auth/login - 로그인**
+    
+    **설명**: 아이디와 비밀번호로 로그인을 시도하고, 성공 시 `AccessToken`과 `RefreshToken`을 함께 반환합니다.
+    
+    ### **Request Body**
+    
+    | Key | Type | Constraints | 설명 |
+    | --- | --- | --- | --- |
+    | `id` | String | `required` | 가입 시 사용한 아이디 |
+    | `password` | String | `required` | 비밀번호 |
+    
+    ### **Responses**
+    
+    - **✅ 200 OK**:
+        
+        ```json
+        {
+          "status": "success",
+          "data": {
+            "accessToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+            "refreshToken": "deFfGgHhIiJjKkLlMmNnOoPpQqRrSsTt...",
+            "user": {
+              "id": 1,
+              "name": "김철수",
+              "role": "USER"
+            }
+          }
+        }
+        ```
+        
+    - **❌ 401 Unauthorized**:
+        
+        ```json
+        {
+          "status": "error",
+          "error": {
+            "code": "INVALID_CREDENTIALS",
+            "message": "아이디 또는 비밀번호가 일치하지 않습니다."
+          }
+        }
+        ```
+        
+
+- **POST/auth/find-username - 아이디 찾기**
+    
+    **설명:** 가입 시 사용한 이메일 주소를 통해 아이디를 찾습니다.
+    
+    **Request Body**
+    
+    | Key | Type | Constraints | 설명 |
+    | --- | --- | --- | --- |
+    | `email` | String | `required` , `email format` | 가입 시 인증한 이메일 주소 |
+    
+    **Responses**
+    
+    - ✅ **200 OK:**
+        
+        ```json
+        {
+          "status": "success",
+          "data": {
+            "id": "hospi***123"
+          }
+        }
+        ```
+        
+    - ❌ **404 Not Found:**
+        
+        ```json
+        {
+          "status": "error",
+          "error": {
+            "code": "USER_NOT_FOUND",
+            "message": "해당 이메일로 가입된 계정을 찾을 수 없습니다."
+          }
+        }
+        ```
+        
+
+- **POST/auth/request - password - reset - 비밀번호 재설정 요청**
+    
+    **설명:** 아이디와 이메일 정보를 확인하여 일치할 경우 비밀번호를 재설정할 수 있는 이메일 발송
+    
+    **Request Body**
+    
+    | Key | Type | Constraints | 설명 |
+    | --- | --- | --- | --- |
+    | `id` | String | `required` | 사용자 아이디 |
+    | `email` | String | `required`, `email format` | 가입 시 사용한 이메일 |
+    
+    **Responses**
+    
+    - ✅ **200 OK:**
+        
+        ```json
+        {
+          "status": "success",
+          "data": {
+            "message": "비밀번호 재설정 이메일이 발송되었습니다. 이메일을 확인해주세요."
+          }
+        }
+        ```
+        
+    - **❌ 404 Not Found:**
+        
+        ```json
+        {
+          "status": "error",
+          "error": {
+            "code": "USER_NOT_FOUND",
+            "message": "입력하신 정보와 일치하는 계정을 찾을 수 없습니다."
+          }
+        }
+        ```
+        
+
+- **POST /auth/refresh - Access Token 재발급**
+    
+    **설명**: Access Token이 만료되었을 때, Refresh Token을 이용해 새로운 Access Token을 발급받습니다.
+    
+    ### **Request Body**
+    
+    | Key | Type | Constraints | 설명 |  |
+    | --- | --- | --- | --- | --- |
+    | `refreshToken` | String | `required` | 로그인 시 발급받아 저장해 둔 Refresh Token |  |
+    
+    **Example Request:**
+    
+    ```json
+    {
+      "refreshToken": "deFfGgHhIiJjKkLlMmNnOoPpQqRrSsTt..."
+    }
+    ```
+    
+    ### **Responses**
+    
+    - **✅ 200 OK**:
+        
+        ```json
+        {
+          "status": "success",
+          "data": {
+            "accessToken": "new_eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+          }
+        }
+        ```
+        
+    - **❌ 401 Unauthorized**:
+        
+        ```json
+        {
+          "status": "error",
+          "error": {
+            "code": "INVALID_REFRESH_TOKEN",
+            "message": "Refresh Token이 유효하지 않습니다. 다시 로그인해주세요."
+          }
+        }
+        ```
+        
+
+---
+
+## 3. 🗓️ 예약 (Reservations)
+
+- **GET /reservations - 예약 목록 조회**
+    
+    **설명**: 자신의 예약 목록을 조회합니다. **과거 내역 / 예정된 내역 필터링**을 지원합니다
+    
+    ### **Query Parameters**
+    
+    | Key | Type | Default | Options | 설명 |
+    | --- | --- | --- | --- | --- |
+    | `period` | String | `UPCOMING` | `UPCOMING`, `PAST` | `UPCOMING`(예정된 예약), `PAST`(과거 예약) |
+    | `status` | String | `ALL` | `PENDING`,`CONFIRMED`,`COMPLETED`,`CANCELED` | 조회할 예약의 상태 (period와 함께 사용 가능) |
+    | `page` | Integer | `1` |  | 조회할 페이지 번호 |
+    | `limit` | Integer | `10` |  | 한 페이지에 보여줄 항목 수 |
+    
+    **Example URL (과거 내역 조회)**: `/reservations?period=PAST&page=1`
+    
+    ### **Response**
+    
+    - ✅ **200 OK:**
+    
+    ```json
+    {
+      "status": "success",
+      "data": {
+        "pagination": {
+          "currentPage": 1,
+          "totalPages": 2,
+          "totalItems": 12
+        },
+        "reservations": [
+          {
+            "id": 152,
+            "hospital_name": "서울대학교병원",
+            "reservation_datetime": "2025-11-20T14:30:00Z",
+            "status": "CONFIRMED",
+            "manager_name": "박서연"
+          },
+          {
+            "id": 148,
+            "hospital_name": "강남세브란스병원",
+            "reservation_datetime": "2025-11-18T10:00:00Z",
+            "status": "PENDING",
+            "manager_name": null
+          }
+        ]
+      }
+    }
+    ```
+    
+- **POST /reservations - 신규 예약 신청**
+    
+    **설명**: 새로운 병원 동행 예약을 생성합니다. 희망 매니저 조건과 결제 카드를 함께 지정합니다.
+    
+    - **백엔드 매칭 로직:**
+        1. API 호출 시 서버에서 `reservation_datetime` (요일/시간)과 `hospital_name` (주소) 정보 추출
+        2. 서버는 조건과 일치하는 활동 가능한 매니저(`GET/managers/me/availability`)검색
+        3. (옵션) `designated_manager_id`가 있다면 2번 검색 건너뛰고 매니저에게 바로 할당 시도
+        4. (옵션) `manager_gender`가 있다면 2번 검색 결과에서 성별을 추가로 필터링합니다.
+        5. 매칭 대상이 1명 이상일 경우 매니저들에게 ‘예약 수락’ 알림을 전송하고 예약은 `PENDING` (대기) 상태가 됩니다.
+    
+    ### **Request Body**
+    
+    | Key | Type | Constraints | 설명 |
+    | --- | --- | --- | --- |
+    | `hospital_name` | String | `required` | 방문할 병원의 전체 이름 |
+    | `reservation_datetime` | DateTime | `required`,`ISO 8601 format` | 예약 시간 (`YYYY-MM-DDTHH:MM:SSZ`) |
+    | `content` | String | `required`,`maxLength: 500` | 진료과, 요청사항 등 상세 내용 |
+    | `designated_manager_id` | Integer | `optional` | 지명하고 싶은 매니저의 ID |
+    | `manager_gender` | String | `optional`, `enum: ["FEMALE", "MALE"]` | 희망하는 매니저 성별 (선택 사항, 미 지정 시 성별 무관) |
+    | `payment_card_id` | Integer | `required` | 결제에 사용할 등록된 카드의 고유 ID |
+    
+    **Example Request**:
+    
+    ```json
+    {
+      "hospital_name": "서울대학교병원",
+      "reservation_datetime": "2025-11-20T14:30:00Z",
+      "content": "안과 정기 검진 동행 부탁드립니다. 접수부터 수납까지 도와주세요.",
+      "designated_manager_id": 42,
+      "manager_gender": "FEMALE",
+      "payment_card_id": 101
+    }
+    ```
+    
+    ### **Responses**
+    
+    - **✅ 201 Created**:
+        
+        ```json
+        {
+          "status": "success",
+          "data": {
+            "reservation_id": 153,
+            "message": "예약이 성공적으로 접수되었습니다."
+          }
+        }
+        ```
+        
+    - ❌ **400 Bad Request:**
+        
+        ```jsx
+        {
+          "status": "error",
+          "error": {
+            "code": "INVALID_INPUT",
+            "message": "필수 입력 정보(결제 카드 등)가 누락되었습니다."
+          }
+        }
+        ```
+        
+    - **❌ 404 Not Found**:
+        
+        ```jsx
+        {
+          "status": "error",
+          "error": {
+            "code": "PAYMENT_CARD_NOT_FOUND",
+            "message": "등록된 결제 카드를 찾을 수 없습니다."
+          }
+        }
+        ```
+        
+        ```json
+        {
+          "status": "error",
+          "error": {
+            "code": "MANAGER_NOT_FOUND",
+            "message": "지정한 매니저를 찾을 수 없습니다."
+          }
+        }
+        ```
+        
+    - **GET/reservations/{id} - 예약 상세 조회**
+        
+        **설명:** 특정 예약 건의 상세 정보를 조회합니다. 결제 정보와 요청했던 매니저 조건이 포함됩니다.
+        
+        **Path Parameters**
+        
+        | Key | Type | 설명 |
+        | --- | --- | --- |
+        | `id` | Integer | 조회할 예약의 고유 ID |
+        
+        **Responses**
+        
+        - ✅ **200 OK:**
+            
+            ```json
+            {
+              "status": "success",
+              "data": {
+                "id": 152,
+                "hospital_name": "서울대학교병원",
+                "reservation_datetime": "2025-11-20T14:30:00Z",
+                "content": "안과 정기 검진 동행 부탁드립니다.",
+                "status": "CONFIRMED",
+                "requested_manager_preferences": {
+                  "gender": "FEMALE"
+                },
+                "payment_info": {
+                  "card_brand": "KB국민카드",
+                  "card_last_four": "1234"
+                },
+                "user": {
+                  "id": 1,
+                  "name": "김철수"
+                },
+                "manager": {
+                  "id": 42,
+                  "name": "박서연",
+                  "profile_image_url": "https://...",
+                  "is_verified": true
+                }
+              }
+            }
+            ```
+            
+        - ❌ **403 Forbidden:**
+            
+            ```json
+            { 
+            	"status": "error", 
+            	"error": { 
+            		"code": "FORBIDDEN_ACCESS", 
+            		"message": "해당 예약 정보를 조회할 권한이 없습니다." 
+            	}
+            }
+            ```
+            
+        - ❌ **404 Not Found:**
+            
+            ```json
+            { 
+            	"status": "error", 
+            	"error": { 
+            		"code": "RESERVATION_NOT_FOUND", 
+            		"message": "해당 예약을 찾을 수 없습니다." 
+            	} 
+            }
+            ```
+            
+    - **PATCH /reservations/cancel/{id} - 예약 취소**
+        
+        **설명:** 확정 대기 중이거나 확정된 예약을 취소합니다.
+        
+        **Path Parameters**
+        
+        | Key | Type | 설명 |
+        | --- | --- | --- |
+        | `id` | Integer | 취소할 매니저의 고유 ID |
+        
+        **Responses**
+        
+        - ✅ **200 OK:**
+            
+            ```json
+            {
+              "status": "success",
+              "data": {
+                "message": "예약이 정상적으로 취소되었습니다."
+              }
+            }
+            ```
+            
+        - ❌ **409 Conflict:**
+            
+            ```json
+            {
+              "status": "error",
+              "error": {
+                "code": "CANCEL_NOT_ALLOWED",
+                "message": "이미 서비스가 시작되었거나 완료된 예약은 취소할 수 없습니다."
+              }
+            }
+            ```
+            
+
+---
+
+## 4. 🌟 매니저 및 후기 (Managers & Reviews)
+
+- **GET /managers/{id} - 매니저 프로필 조회**
+    
+    **설명**: 매니저(동행자)의 상세 프로필 정보(인증 여부, 후기 포함)를 조회합니다.
+    
+    ### **Path Parameters**
+    
+    | Key | Type | 설명 |
+    | --- | --- | --- |
+    | `id` | Integer | 조회할 매니저의 고유 ID |
+    
+    ### **Response**
+    
+    - ✅**200 OK**
+    
+    ```json
+    {
+        "status": "success",
+        "data": {
+            "id": 42,
+            "name": "박서연",
+            "profile_image_url": "https://.../profile.jpg",
+            "is_verified": true,
+            "introduction": "마음 편한 동행을 약속드립니다.",
+            "average_rating": 4.8,
+            "review_count": 25,
+            "latest_reviews": [
+                { "reviewer_name": "이*정", "rating": 5, "comment": "정말 친절하셨어요." },
+                { "reviewer_name": "최*준", "rating": 5, "comment": "덕분에 병원 잘 다녀왔습니다." }
+            ]
+        }
+    }
+    ```
+    
+- **GET /managers/me/availability - 내 활동 가능 정보 조회 (신규)**
+    - **설명:** (매니저 전용) 로그인 한 매니저가 **자신의** 현재 활동 가능 지역, 요일, 시간 설정을 조회합니다.
+    - **인증:** `Authorization: Bearer {AccessToken}` ****(매니저 토큰)이 필요합니다.
+    
+    ### **Responses**
+    
+    - ✅ **200 OK:**
+        
+        ```json
+        {
+          "status": "success",
+          "data": {
+            "activity_area": {
+              "address": "서울 강남구",
+              "radius_km": 5
+            },
+            "available_schedule": [
+              {
+                "day_of_week": "MONDAY",
+                "start_time": "09:00",
+                "end_time": "18:00"
+              },
+              {
+                "day_of_week": "WEDNESDAY",
+                "start_time": "09:00",
+                "end_time": "18:00"
+              },
+              {
+                "day_of_week": "FRIDAY",
+                "start_time": "14:00",
+                "end_time": "20:00"
+              }
+            ]
+          }
+        }
+        ```
+        
+    - ❌ **403 Forbidden:**
+        
+        ```json
+        {
+          "status": "error",
+          "error": {
+            "code": "FORBIDDEN_ACCESS",
+            "message": "매니저 계정으로만 접근 가능합니다."
+          }
+        }
+        ```
+        
+- **PATCH /managers/me/availability - 내 활동 가능 정보 수정 (신규)**
+    
+    **설명:** (매니저 전용) 로그인한 매니저가 자신의 활동 가능 지역(주소/반경), 요일, 시간을 설정(수정)합니다.
+    
+    - **참고:** `available_schedule`에 빈 배열 `[]`을 보내면 모든 활동 가능 요일을 삭제합니다.
+    - **인증:** `Authorization: Bearer {AccessToken}` (매니저 토큰)이 필요합니다.
+    
+    ### **Request Body**
+    
+    | Key | Type | Constraints | 설명 |
+    | --- | --- | --- | --- |
+    | `activity_area` | Object | `optional` | 활동 중심 주소 및 반경 (km) |
+    | └`address` | String | `required` | 활동 중심 주소 (예: "서울 강남구 역삼동") |
+    | └`radius_km` | Integer | `required` | 중심 주소 기준 활동 반경 (예: 5 → 5km) |
+    | `available_schedule` | Array[Object] | `optional` | 활동 가능한 요일 및 시간 목록 |
+    | └`day_of_week` | String | `required` | 요일 (MONDAY, TUESDAY, WEDNESDAY, THURSDAY, FRIDAY, SATURDAY, SUNDAY) |
+    | └`start_time` | String | `required` | 시작 시간 (HH:MM, 예: "09:00") |
+    | └`end_time` | String | `required` | 종료 시간 (HH:MM, 예: "18:00") |
+    
+    **Example Request**:
+    
+    ```json
+    {
+      "activity_area": {
+        "address": "서울 강남구 역삼1동",
+        "radius_km": 3
+      },
+      "available_schedule": [
+        {
+          "day_of_week": "MONDAY",
+          "start_time": "10:00",
+          "end_time": "17:00"
+        },
+        {
+          "day_of_week": "TUESDAY",
+          "start_time": "10:00",
+          "end_time": "17:00"
+        }
+      ]
+    }
+    ```
+    
+    ### **Responses**
+    
+    - ✅ **200 OK:**
+        
+        ```json
+        {
+          "status": "success",
+          "data": {
+            "message": "활동 가능 정보가 성공적으로 업데이트되었습니다."
+          }
+        }
+        ```
+        
+- **POST /reservations/{id}/reviews - 후기 작성**
+    
+    **설명**: 완료된 예약 건에 대해 사용자가 매니저에 대한 후기를 작성합니다.
+    
+    ### **Path Parameters**
+    
+    | Key | Type | 설명 |
+    | --- | --- | --- |
+    | `id` | Integer | 후기를 작성할 예약의 고유 ID |
+    
+    ### **Request Body**
+    
+    | Key | Type | Constraints | 설명 |
+    | --- | --- | --- | --- |
+    | `rating` | Integer | `required`,`min:1`,`max:5` | 별점 (1~5) |
+    | `comment` | String | `required`,`maxLength: 500` | 후기 내용 |
+    
+    ### **Responses**
+    
+    - **✅ 201 Created**:
+        
+        ```json
+        {
+          "status": "success",
+          "data": { 
+            "message": "소중한 후기를 남겨주셔서 감사합니다." 
+          }
+        }
+        ```
+        
+    - **❌ 403 Forbidden**:
+        
+        ```json
+        {
+          "status": "error",
+          "error": {
+            "code": "FORBIDDEN_ACTION",
+            "message": "완료된 예약에 대해서만 후기를 작성할 수 있습니다."
+          }
+        }
+        ```
+        
+
+---
+
+## 5. 📍 실시간 추적 (Tracking)
+
+**설명:** 이 섹션의 API는 예약이 `CONFIRMED` 상태가 되고 서비스 시작 시간이 임박했을 때부터 활성화 됩니다.
+
+- **GET /tracking/reservations/{id} - 실시간 동행 상태 조회**
+    
+    **설명:** (사용자/보호자 전용) 현재 진행 중인 동행의 **실시간 상태**와 마지막 위치를 조회합니다.
+    
+    - **[인증]:** `Authorization: Bearer {AccessToken}` 헤더가 필요합니다.
+    
+    ### **Path Parameters**
+    
+    | Key | Type | 설명 |
+    | --- | --- | --- |
+    | `id` | Integer | 조회할 예약의 고유 ID |
+    
+    ### **Responses**
+    
+    - ✅ **200 OK:**
+        
+        **설명:** `tracking_status` 필드를 통해 “동행 중” 등 상태를 전달합니다.
+        
+        ```json
+        {
+          "status": "success",
+          "data": {
+            "reservation_id": 152,
+            "tracking_status": "SERVICE_STARTED",
+            "last_known_location": {
+              "latitude": 37.50449,
+              "longitude": 127.0489,
+              "updated_at": "2025-11-20T14:15:00Z"
+            },
+            "manager_name": "박서연"
+          }
+        }
+        ```
+        
+    - ❌ **404 Not Found**
+        
+        **설명:** 아직 서비스가 시작 전이라 추적 정보가 없는 경우
+        
+        ```json
+        {
+          "status": "error",
+          "error": {
+            "code": "TRACKING_NOT_ACTIVE",
+            "message": "해당 예약의 실시간 추적이 아직 활성화되지 않았습니다."
+          }
+        }
+        ```
+        
+- **PATCH /tracking/reservations/{id}/status - 동행 상태 업데이트**
+    
+    **설명:** (매니저 전용) 매니저가 동행 서비스의 **주요 상태**를 변경할 때 호출합니다.
+    
+    - **[알림 기능] -** 이 API로 `status`가 `ARRIVED_AT_HOSPITAL`로 전송되면 **서버는 즉시 해당 예약의 사용자에게 푸시 알림 발송**해야 합니다.
+    - **[인증] - `Authorization: Bearer {AccessToken`** 헤더가 필요합니다
+    
+    ### **Path Parameters**
+    
+    | Key | Type | 설명 |
+    | --- | --- | --- |
+    | `id` | Integer | 진행 중인 예약의 고유 ID |
+    
+    ### **Request Body**
+    
+    | Key | Type | Constraints | 설명 |
+    | --- | --- | --- | --- |
+    | `status` | String | `required` , `enum` | 변경할 동행 상태 |
+    - `status` **Enum 값 상세:**
+        - `SERVICE_STARTED` : **(동행 중)** 매니저가 서비스를 시작함 (환자 픽업 또는 이동 시작)
+        - `ARRIVED_AT_HOSPITAL` : **(병원 도착)** 병원에 도착함
+        - `SERVICE_COMPLETED` : **(동행 완료)** 모든 서비스(수납 등)를 마치고 동행을 종료함
+    
+    **Example Request**:
+    
+    ```json
+    {
+      "status": "ARRIVED_AT_HOSPITAL"
+    }
+    ```
+    
+    ### **Responses**
+    
+    - **✅ 200 OK**:
+    
+    ```json
+    {
+      "status": "success",
+      "data": {
+        "message": "동행 상태가 '병원 도착'으로 업데이트되었습니다."
+      }
+    }
+    ```
+    
+    - **❌ 403 Forbidden**:
+    
+    ```json
+    {
+      "status": "error",
+      "error": {
+        "code": "NOT_YOUR_RESERVATION",
+        "message": "해당 예약에 대한 권한이 없습니다."
+      }
+    }
+    ```
+    
+- **PATCH /tracking/reservations/{id}/location - 매니저 위치 주기적 업데이트**
+    
+    **설명**: (매니저 전용) 동행 서비스가 시작(`SERVICE_STARTED` )되면, 매니저 앱이 백그라운드에서 **주기적으로 위치 데이터를 수집하여 일괄 전송**합니다.
+    
+    - **최적화 가이드**:
+        - 클라이언트는 10초마다 위치를 수집하고 **1분에 한 번씩** API를 호출하여 **6개의 위치 데이터를 배열에 담아** 한번에 전송
+    - **인증:** `Authorization: Bearer {AccessToken}` 헤더가 필요합니다.
+    
+    ### **Path Parameters**
+    
+    | Key | Type | 설명 |
+    | --- | --- | --- |
+    | `id` | Integer | 진행 중인 예약의 고유 ID |
+    
+    ### **Request Body** (단일 위치가 아닌 locations 배열로 전송)
+    
+    | Key | Type | Constraints | 설명 |
+    | --- | --- | --- | --- |
+    | `locations` | Array[Object] | `required` | 수집된 위치 정보의 배열 |
+    | `└ latitude` | Number | `required` | 위도 |
+    | `└ longitude` | Number | `required` | 경도 |
+    | `└ timestamp` | DateTime | `required` | 해당 위치가 수집된 시각 (ISO 8601) |
+    
+    **Example Request**: (10초 간격으로 3개의 위치 데이터를 모아서 한 번에 전송하는 예시)
+    
+    ```json
+    {
+      "locations": [
+        {
+          "latitude": 37.50449,
+          "longitude": 127.0489,
+          "timestamp": "2025-11-20T14:15:10Z"
+        },
+        {
+          "latitude": 37.50480,
+          "longitude": 127.0495,
+          "timestamp": "2025-11-20T14:15:20Z"
+        },
+        {
+          "latitude": 37.50510,
+          "longitude": 127.0500,
+          "timestamp": "2025-11-20T14:15:30Z"
+        }
+      ]
+    }
+    ```
+    
+    ### **Responses**
+    
+    - **✅ 200 OK**:
+        
+        ```json
+        {
+          "status": "success",
+          "data": {
+            "message": "위치가 성공적으로 업데이트되었습니다."
+          }
+        }
+        ```
+        
+    - **❌ 409 Conflict**: (동행 시작 상태가 되기 전에 위치 전송을 시도할 경우)
+        
+        ```json
+        {
+          "status": "error",
+          "error": {
+            "code": "SERVICE_NOT_STARTED",
+            "message": "아직 동행 서비스가 시작되지 않았습니다."
+          }
+        }
+        ```
+        
+
+---
+
+## 6. 💊 병원 / 약국 (Facilities)
+
+- **GET /facilities/shearch - 주변 병원/약국 검색**
+    
+    **설명**: 사용자의 현재 위치를 기반으로 주변의 병원 또는 약국을 검색합니다. 실시간 운영 여부를 필터링 할 수 있습니다.
+    
+    - 참고: 이 API는 외부 공공 데이터 API 또는 제휴된 DB를 기반으로 정보를 제공한다고 가정합니다.
+    - [인증]: `Authorization: Bearer {AccessToken}` 헤더가 필요합니다.
+    
+    ### **Query Parameters**
+    
+    | Key | Type | Default | Options | 설명 |
+    | --- | --- | --- | --- | --- |
+    | `latitude`  | Number |  | required | 검색 기준이 될 현재 위치의 위도 |
+    | `longitude` | Number |  | required | 검색 기준이 될 현재 위치의 경도 |
+    | `type`  | String | `HOSPITAL`  | `HOSPITAL`, `PHARMACY` | 검색할 장소의 유형 (병원 또는 약국) |
+    | `open_now`  | Boolean | `false` |  | true로 설정 시, 현재 운영 중인 곳만 필터링합니다. |
+    | `radius` | Integer | 3000 |  | 검색 반경 (미터 단위, 예: 3000 = 3km) |
+    | `page` | Integer | 1 |  | 조회할 페이지 번호 |
+    | `limit` | Integer | 10 |  | 한 페이지에 보여줄 항목 수 |
+    
+    **Example URL (현재 위치 기준 3km 내 운영 중인 약국): `/facilities/search?latitude=37.50449&longitude=127.0489&type=PHARMACY&open_now=true`**
+    
+    ### **Responses**
+    
+    - ✅ **200 OK:**
+        
+        ```json
+        {
+          "status": "success",
+          "data": {
+            "pagination": {
+              "currentPage": 1,
+              "totalPages": 1,
+              "totalItems": 2
+            },
+            "facilities": [
+              {
+                "id": "A1234567",
+                "name": "튼튼약국",
+                "type": "PHARMACY",
+                "address": "서울 강남구 테헤란로 123",
+                "phone": "02-123-4567",
+                "location": {
+                  "latitude": 37.50455,
+                  "longitude": 127.0490
+                },
+                "distance_meters": 50,
+                "is_open": true,
+                "operating_hours_today": "09:00 - 21:00"
+              },
+              {
+                "id": "B9876543",
+                "name": "강남종합병원",
+                "type": "HOSPITAL",
+                "address": "서울 강남구 강남대로 456",
+                "phone": "02-987-6543",
+                "location": {
+                  "latitude": 37.50111,
+                  "longitude": 127.0488
+                },
+                "distance_meters": 420,
+                "is_open": true,
+                "operating_hours_today": "24시간 운영 (응급실)"
+              }
+            ]
+          }
+        }
+        ```
+        
+    - ❌ **400 Bad Request: (필수 파라미터 누락)**
+        
+        ```json
+        {
+          "status": "error",
+          "error": {
+            "code": "MISSING_REQUIRED_PARAMS",
+            "message": "필수 파라미터(latitude, longitude, type)가 누락되었습니다."
+          }
+        }
+        ```
+        
+    - ❌ **401 Unauthorized: (Access Token 만료 시)**
+        
+        ```json
+        **{
+          "status": "error",
+          "error": {
+            "code": "TOKEN_EXPIRED",
+            "message": "Access Token이 만료되었습니다."
+          }
+        }**
+        ```
+        
+    - ❌ **401 Unauthorized: (Access Token이 없거나 유효하지 않을 때)**
+        
+        ```json
+        {
+          "status": "error",
+          "error": {
+            "code": "INVALID_TOKEN",
+            "message": "유효하지 않은 토큰입니다. 로그인이 필요합니다."
+          }
+        }
+        ```
+        
+
+---

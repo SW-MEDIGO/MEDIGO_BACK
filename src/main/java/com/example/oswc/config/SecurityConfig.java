@@ -23,7 +23,7 @@ public class SecurityConfig {
     @Order(1)
     public SecurityFilterChain publicChain(HttpSecurity http) throws Exception {
         http
-            .securityMatcher("/auth/**", "/health", "/swagger-ui.html", "/swagger-ui/**", "/v3/api-docs/**", "/files/**")
+            .securityMatcher("/auth/**", "/health", "/swagger-ui.html", "/swagger-ui/**", "/v3/api-docs/**", "/files/**", "/facilities/**")
             .csrf(csrf -> csrf.disable())
             .cors(Customizer.withDefaults())
             .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
@@ -32,6 +32,7 @@ public class SecurityConfig {
                 .requestMatchers("/health").permitAll()
                 .requestMatchers("/swagger-ui.html", "/swagger-ui/**", "/v3/api-docs/**").permitAll()
                 .requestMatchers("/files/**").permitAll()
+                .requestMatchers("/facilities/**").permitAll()
                 .anyRequest().permitAll()
             )
             .anonymous(Customizer.withDefaults())
