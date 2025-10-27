@@ -44,6 +44,7 @@ public class JwtAuthFilter extends OncePerRequestFilter {
         if (pathMatcher.match("/swagger-ui/**", path)) return true;
         if (pathMatcher.match("/v3/api-docs/**", path)) return true;
         if (pathMatcher.match("/files/**", path)) return true;
+        if (pathMatcher.match("/facilities/**", path)) return true;
 
         // CORS 프리플라이트는 무조건 스킵
         if (HttpMethod.OPTIONS.matches(request.getMethod())) return true;
