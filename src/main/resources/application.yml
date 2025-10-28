@@ -1,9 +1,37 @@
 spring:
   data:
     mongodb:
-      uri: mongodb://localhost:27017/oswc  # 로컬 MongoDB
+      # 로컬 MongoDB 예시 (DB 이름: oswc). 환경변수로 대체 가능: ${MONGO_URI}
+      uri: mongodb://localhost:27017/oswc
+
+    redis:
+      # Refresh 토큰 로테이션/로그아웃용 Redis
+      host: localhost
+      port: 6379
+
+  servlet:
+    multipart:
+      # 아바타 업로드 한도
+      max-file-size: 2MB
+      max-request-size: 2MB
+
 server:
   port: 8080
+
+app:
+  jwt:
+    # 최소 32바이트(문자 32개 이상) 랜덤 문자열로 반드시 교체하세요.
+    # 예) PowerShell:  [guid]::NewGuid().ToString('N') + [guid]::NewGuid().ToString('N')
+    secret: "CHANGE_ME_TO_A_LONG_RANDOM_SECRET_32CHARS_MIN"
+    access-exp-min: 30     # Access Token 만료(분)
+    refresh-exp-days: 14   # Refresh Token 만료(일)
+
+  upload:
+    dir: uploads           # 정적 리소스 매핑: /files/** → <프로젝트>/uploads/**
+
 logging:
   level:
-    org.springframework.data.mongodb.core.MongoTemplate: info
+    org.springframework.security: DEBUG   # 보안 문제 디버깅 시 유용. 운영에서는 INFO 권장.
+fcm:
+  enabled: false
+  server-key: ""
