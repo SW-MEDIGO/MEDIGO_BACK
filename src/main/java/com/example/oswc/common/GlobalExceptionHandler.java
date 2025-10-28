@@ -88,8 +88,22 @@ public class GlobalExceptionHandler {
     if (message.contains("이미 서비스가 완료된 예약은 취소할 수 없습니다")) {
       return body(HttpStatus.CONFLICT, "CANCEL_NOT_ALLOWED", message);
     }
+    if (message.contains("이미 서비스가 시작되었거나 완료된 예약은 취소할 수 없습니다")) {
+      return body(HttpStatus.CONFLICT, "CANCEL_NOT_ALLOWED", message);
+    }
     if (message.contains("해당 예약을 취소할 권한이 없습니다")) {
       return body(HttpStatus.FORBIDDEN, "FORBIDDEN_ACCESS", message);
+    }
+    if (message.contains("매니저 계정으로만 접근 가능합니다.")) {
+      return body(HttpStatus.FORBIDDEN, "FORBIDDEN_ACCESS", message);
+    }
+
+    // 추적 관련
+    if (message.contains("실시간 추적이 아직 활성화되지 않았습니다")) {
+      return body(HttpStatus.NOT_FOUND, "TRACKING_NOT_ACTIVE", message);
+    }
+    if (message.contains("아직 동행 서비스가 시작되지 않았습니다.")) {
+      return body(HttpStatus.CONFLICT, "SERVICE_NOT_STARTED", message);
     }
 
     // 기본 처리
