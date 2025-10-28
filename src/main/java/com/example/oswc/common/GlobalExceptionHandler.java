@@ -94,6 +94,9 @@ public class GlobalExceptionHandler {
     if (message.contains("해당 예약을 취소할 권한이 없습니다")) {
       return body(HttpStatus.FORBIDDEN, "FORBIDDEN_ACCESS", message);
     }
+    if (message.contains("매니저 계정으로만 접근 가능합니다.")) {
+      return body(HttpStatus.FORBIDDEN, "FORBIDDEN_ACCESS", message);
+    }
 
     // 기본 처리
     return body(HttpStatus.INTERNAL_SERVER_ERROR, "INTERNAL_SERVER_ERROR", message);
