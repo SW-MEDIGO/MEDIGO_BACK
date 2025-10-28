@@ -88,6 +88,9 @@ public class GlobalExceptionHandler {
     if (message.contains("이미 서비스가 완료된 예약은 취소할 수 없습니다")) {
       return body(HttpStatus.CONFLICT, "CANCEL_NOT_ALLOWED", message);
     }
+    if (message.contains("이미 서비스가 시작되었거나 완료된 예약은 취소할 수 없습니다")) {
+      return body(HttpStatus.CONFLICT, "CANCEL_NOT_ALLOWED", message);
+    }
     if (message.contains("해당 예약을 취소할 권한이 없습니다")) {
       return body(HttpStatus.FORBIDDEN, "FORBIDDEN_ACCESS", message);
     }

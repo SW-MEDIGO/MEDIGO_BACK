@@ -69,4 +69,13 @@ public class ReservationController {
     ApiResponse<?> response = reservationService.cancelReservation(id, userId);
     return ResponseEntity.ok(response);
   }
+
+  /** GET /reservations/{id}/events - 예약 이벤트 조회 */
+  @GetMapping("/{id}/events")
+  public ResponseEntity<?> listReservationEvents(Authentication auth, @PathVariable String id) {
+
+    String userId = auth.getName();
+    ApiResponse<?> response = reservationService.listReservationEvents(id, userId);
+    return ResponseEntity.ok(response);
+  }
 }

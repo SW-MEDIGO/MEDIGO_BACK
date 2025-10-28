@@ -122,7 +122,7 @@ try {
     # 7. 취소 확인 (상태가 CANCELED로 변경되었는지)
     Write-Host "`n7. 취소 상태 확인..." -ForegroundColor Yellow
     $canceled = Invoke-RestMethod -Uri "$baseUrl/reservations/$FUTURE_ID" -Method GET -Headers $headers
-    if ($canceled.data.status -eq "CANCELED") {
+    if ($canceled.data.status -eq 'CANCELED') {
         Write-Host "✓ 취소 상태 확인됨" -ForegroundColor Green
     }
 
@@ -145,12 +145,12 @@ try {
     Write-Host "`n✗ 테스트 실패: $($_.Exception.Message)" -ForegroundColor Red
     if ($_.Exception.Response) {
         $statusCode = $_.Exception.Response.StatusCode.value__
-        Write-Host "  상태 코드: $statusCode" -ForegroundColor Red
-        
+        Write-Host ("  상태 코드: {0}" -f $statusCode) -ForegroundColor Red
+
         $errorStream = $_.Exception.Response.GetResponseStream()
         $reader = New-Object System.IO.StreamReader($errorStream)
         $errorBody = $reader.ReadToEnd()
-        Write-Host "  응답: $errorBody" -ForegroundColor Red
+        Write-Host ('  응답: ' + $errorBody) -ForegroundColor Red
     }
     
     throw
