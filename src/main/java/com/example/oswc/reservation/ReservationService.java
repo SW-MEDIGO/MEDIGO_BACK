@@ -5,6 +5,7 @@ import com.example.oswc.reservation.dto.CreateReservationRequest;
 import com.example.oswc.reservation.dto.ReservationDetailResponse;
 import com.example.oswc.reservation.dto.ReservationResponse;
 import java.time.Instant;
+import java.time.format.DateTimeFormatter;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -27,25 +28,73 @@ public class ReservationService {
   public ApiResponse<?> getReservations(
       String userId, String period, String status, int page, int limit) {
 
-    Pageable pageable = PageRequest.of(page - 1, limit);
-    Page<ReservationDocument> pageResult;
-
-    // 상태별 필터링
-    if (status != null && !status.equals("ALL") && !status.equals("")) {
-      ReservationStatus reservationStatus = ReservationStatus.valueOf(status.toUpperCase());
-      pageResult = reservationRepository.findByUserIdAndStatus(userId, reservationStatus, pageable);
+    // period 유효성 및 기본값(UPCOMING)
+    boolean isUpcoming;
+    if (period == null || period.isBlank()) {
+      isUpcoming = true;
+    } else if ("UPCOMING".equalsIgnoreCase(period)) {
+      isUpcoming = true;
+    } else if ("PAST".equalsIgnoreCase(period)) {
+      isUpcoming = false;
     } else {
-      pageResult = reservationRepository.findByUserId(userId, pageable);
+      // 잘못된 period 값
+      throw new IllegalArgumentException("INVALID_INPUT");
     }
 
-    // 기간별 필터링 (period는 클라이언트에서 처리하도록)
+    // 정렬: UPCOMING → 오름차순, PAST → 내림차순
+    org.springframework.data.domain.Sort sort =
+        isUpcoming
+            ? org.springframework.data.domain.Sort.by("reservationDatetime").ascending()
+            : org.springframework.data.domain.Sort.by("reservationDatetime").descending();
+
+    Pageable pageable = PageRequest.of(Math.max(page - 1, 0), limit, sort);
+
+    // now Instant (Document가 Instant를 사용)
+    Instant nowInstant = Instant.now();
+
+    boolean filterByStatus = status != null && !status.isBlank() && !"ALL".equalsIgnoreCase(status);
+    Page<ReservationDocument> pageResult;
+    if (isUpcoming) {
+      if (filterByStatus) {
+        ReservationStatus reservationStatus;
+        try {
+          reservationStatus = ReservationStatus.valueOf(status.toUpperCase());
+        } catch (Exception e) {
+          throw new IllegalArgumentException("INVALID_INPUT");
+        }
+        pageResult =
+            reservationRepository.findByUserIdAndStatusAndReservationDatetimeGreaterThanEqual(
+                userId, reservationStatus, nowInstant, pageable);
+      } else {
+        pageResult =
+            reservationRepository.findByUserIdAndReservationDatetimeGreaterThanEqual(
+                userId, nowInstant, pageable);
+      }
+    } else {
+      if (filterByStatus) {
+        ReservationStatus reservationStatus;
+        try {
+          reservationStatus = ReservationStatus.valueOf(status.toUpperCase());
+        } catch (Exception e) {
+          throw new IllegalArgumentException("INVALID_INPUT");
+        }
+        pageResult =
+            reservationRepository.findByUserIdAndStatusAndReservationDatetimeLessThan(
+                userId, reservationStatus, nowInstant, pageable);
+      } else {
+        pageResult =
+            reservationRepository.findByUserIdAndReservationDatetimeLessThan(
+                userId, nowInstant, pageable);
+      }
+    }
+
     List<ReservationDocument> reservations = pageResult.getContent();
 
     Map<String, Object> data = new HashMap<>();
     data.put(
         "pagination",
         Map.of(
-            "currentPage", page,
+            "currentPage", pageResult.getNumber() + 1,
             "totalPages", pageResult.getTotalPages(),
             "totalItems", pageResult.getTotalElements()));
     data.put(
@@ -59,7 +108,13 @@ public class ReservationService {
     ReservationDocument reservation = new ReservationDocument();
     reservation.setUserId(userId);
     reservation.setHospitalName(request.getHospitalName());
-    reservation.setReservationDatetime(request.getReservationDatetime());
+    // ISO 8601 입력을 Instant로 파싱 (실패 시 400)
+    try {
+      Instant parsed = Instant.parse(request.getReservationDatetime());
+      reservation.setReservationDatetime(parsed);
+    } catch (Exception e) {
+      throw new IllegalArgumentException("INVALID_INPUT");
+    }
     reservation.setContent(request.getContent());
     reservation.setStatus(ReservationStatus.PENDING);
     reservation.setDesignatedManagerId(request.getDesignatedManagerId());
@@ -99,7 +154,10 @@ public class ReservationService {
     ReservationDetailResponse response = new ReservationDetailResponse();
     response.setId(reservation.getId());
     response.setHospitalName(reservation.getHospitalName());
-    response.setReservationDatetime(reservation.getReservationDatetime());
+    if (reservation.getReservationDatetime() != null) {
+      response.setReservationDatetime(
+          DateTimeFormatter.ISO_INSTANT.format(reservation.getReservationDatetime()));
+    }
     response.setContent(reservation.getContent());
     response.setStatus(reservation.getStatus());
 
@@ -167,7 +225,11 @@ public class ReservationService {
     ReservationResponse response = new ReservationResponse();
     response.setId(doc.getId());
     response.setHospitalName(doc.getHospitalName());
-    response.setReservationDatetime(doc.getReservationDatetime());
+    // Instant -> ISO 8601 문자열
+    if (doc.getReservationDatetime() != null) {
+      response.setReservationDatetime(
+          DateTimeFormatter.ISO_INSTANT.format(doc.getReservationDatetime()));
+    }
     response.setStatus(doc.getStatus());
     response.setManagerName(doc.getManagerName());
     response.setManagerGender(doc.getManagerGender());

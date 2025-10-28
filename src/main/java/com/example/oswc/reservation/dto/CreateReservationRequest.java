@@ -1,6 +1,7 @@
 package com.example.oswc.reservation.dto;
 
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 
 public class CreateReservationRequest {
@@ -9,6 +10,7 @@ public class CreateReservationRequest {
   private String hospitalName;
 
   @NotBlank(message = "예약 날짜 및 시간은 필수입니다.")
+  @Pattern(regexp = "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$", message = "INVALID_INPUT")
   private String reservationDatetime;
 
   @NotBlank(message = "예약 내용은 필수입니다.")

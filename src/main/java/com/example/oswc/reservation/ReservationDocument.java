@@ -1,9 +1,18 @@
 package com.example.oswc.reservation;
 
+import java.time.Instant;
 import org.springframework.data.annotation.Id;
+import org.springframework.data.mongodb.core.index.CompoundIndex;
+import org.springframework.data.mongodb.core.index.CompoundIndexes;
 import org.springframework.data.mongodb.core.mapping.Document;
 
 @Document(collection = "reservations")
+@CompoundIndexes({
+  @CompoundIndex(name = "user_datetime_idx", def = "{ 'userId': 1, 'reservationDatetime': 1 }"),
+  @CompoundIndex(
+      name = "user_status_datetime_idx",
+      def = "{ 'userId': 1, 'status': 1, 'reservationDatetime': 1 }")
+})
 public class ReservationDocument {
 
   @Id private String id;
@@ -14,8 +23,8 @@ public class ReservationDocument {
   /** 병원 이름 */
   private String hospitalName;
 
-  /** 예약 날짜 및 시간 (ISO 8601) */
-  private String reservationDatetime;
+  /** 예약 날짜 및 시간 (UTC Instant) */
+  private Instant reservationDatetime;
 
   /** 예약 내용 (진료과, 요청사항 등) */
   private String content;
@@ -72,11 +81,11 @@ public class ReservationDocument {
     this.hospitalName = hospitalName;
   }
 
-  public String getReservationDatetime() {
+  public Instant getReservationDatetime() {
     return reservationDatetime;
   }
 
-  public void setReservationDatetime(String reservationDatetime) {
+  public void setReservationDatetime(Instant reservationDatetime) {
     this.reservationDatetime = reservationDatetime;
   }
 
