@@ -98,6 +98,14 @@ public class GlobalExceptionHandler {
       return body(HttpStatus.FORBIDDEN, "FORBIDDEN_ACCESS", message);
     }
 
+    // 추적 관련
+    if (message.contains("실시간 추적이 아직 활성화되지 않았습니다")) {
+      return body(HttpStatus.NOT_FOUND, "TRACKING_NOT_ACTIVE", message);
+    }
+    if (message.contains("아직 동행 서비스가 시작되지 않았습니다.")) {
+      return body(HttpStatus.CONFLICT, "SERVICE_NOT_STARTED", message);
+    }
+
     // 기본 처리
     return body(HttpStatus.INTERNAL_SERVER_ERROR, "INTERNAL_SERVER_ERROR", message);
   }
