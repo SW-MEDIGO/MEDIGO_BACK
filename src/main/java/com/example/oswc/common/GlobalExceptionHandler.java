@@ -106,6 +106,11 @@ public class GlobalExceptionHandler {
       return body(HttpStatus.CONFLICT, "SERVICE_NOT_STARTED", message);
     }
 
+    // 리뷰 관련
+    if (message.contains("완료된 예약에 대해서만 후기를 작성할 수 있습니다.")) {
+      return body(HttpStatus.FORBIDDEN, "FORBIDDEN_ACTION", message);
+    }
+
     // 기본 처리
     return body(HttpStatus.INTERNAL_SERVER_ERROR, "INTERNAL_SERVER_ERROR", message);
   }
