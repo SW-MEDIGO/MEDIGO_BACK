@@ -32,3 +32,6 @@ app:
 logging:
   level:
     org.springframework.security: DEBUG   # 보안 문제 디버깅 시 유용. 운영에서는 INFO 권장.
+fcm:
+  enabled: false
+  server-key: ""

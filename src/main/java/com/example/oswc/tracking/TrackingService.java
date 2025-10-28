@@ -1,6 +1,9 @@
 package com.example.oswc.tracking;
 
 import com.example.oswc.common.ApiResponse;
+import com.example.oswc.common.NotificationService;
+import com.example.oswc.reservation.ReservationDocument;
+import com.example.oswc.reservation.ReservationRepository;
 import com.example.oswc.tracking.dto.TrackingResponse;
 import java.time.format.DateTimeFormatter;
 import java.util.Map;
@@ -10,9 +13,16 @@ import org.springframework.stereotype.Service;
 public class TrackingService {
 
   private final TrackingRepository repository;
+  private final NotificationService notificationService;
+  private final ReservationRepository reservationRepository;
 
-  public TrackingService(TrackingRepository repository) {
+  public TrackingService(
+      TrackingRepository repository,
+      NotificationService notificationService,
+      ReservationRepository reservationRepository) {
     this.repository = repository;
+    this.notificationService = notificationService;
+    this.reservationRepository = reservationRepository;
   }
 
   public ApiResponse<?> getTracking(String reservationId, String requesterId) {
@@ -57,6 +67,14 @@ public class TrackingService {
     doc.setStatus(TrackingStatus.valueOf(statusUpper));
     doc.setLastUpdatedAt(java.time.Instant.now());
     repository.save(doc);
+
+    // 병원 도착 시 사용자에게 푸시 알림
+    if ("ARRIVED_AT_HOSPITAL".equals(statusUpper)) {
+      ReservationDocument res = reservationRepository.findById(reservationId).orElse(null);
+      if (res != null && res.getUserId() != null) {
+        notificationService.sendToUser(res.getUserId(), "병원 도착", "매니저가 병원에 도착했습니다.");
+      }
+    }
 
     return com.example.oswc.common.ApiResponse.ok(
         java.util.Map.of(
